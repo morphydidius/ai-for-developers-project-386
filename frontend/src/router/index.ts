@@ -15,19 +15,29 @@ const router = createRouter({
       component: () => import('../views/BookingPage.vue'),
     },
     {
-      path: '/admin/slots',
-      name: 'admin-slots',
-      component: () => import('../views/AdminSlotsPage.vue'),
-    },
-    {
-      path: '/admin/event-types',
-      name: 'admin-event-types',
-      component: () => import('../views/AdminEventTypesPage.vue'),
-    },
-    {
-      path: '/admin/bookings',
-      name: 'admin-bookings',
-      component: () => import('../views/AdminBookingsPage.vue'),
+      path: '/admin',
+      component: () => import('../views/AdminLayout.vue'),
+      children: [
+        {
+          path: '',
+          redirect: '/admin/bookings',
+        },
+        {
+          path: 'bookings',
+          name: 'admin-bookings',
+          component: () => import('../views/AdminBookingsPage.vue'),
+        },
+        {
+          path: 'event-types',
+          name: 'admin-event-types',
+          component: () => import('../views/AdminEventTypesPage.vue'),
+        },
+        {
+          path: 'slots',
+          name: 'admin-slots',
+          component: () => import('../views/AdminSlotsPage.vue'),
+        },
+      ],
     },
   ],
 })

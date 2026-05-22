@@ -1,9 +1,20 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { mockEventTypes } from '@/mocks/eventTypes'
+import { api } from '@/api/client'
+import type { EventType } from '@/types/api'
 
 const router = useRouter()
+const eventTypes = ref<EventType[]>([])
+
+onMounted(async () => {
+  try {
+    eventTypes.value = await api.eventTypes.list()
+  } catch {
+    eventTypes.value = []
+  }
+})
 
 function goToBooking(eventTypeId: string) {
   router.push(`/event/${eventTypeId}`)
@@ -16,9 +27,13 @@ function goToBooking(eventTypeId: string) {
       Выберите тип встречи
     </h1>
 
-    <div class="grid gap-6 sm:grid-cols-2 max-w-2xl mx-auto">
+    <div v-if="eventTypes.length === 0" class="text-center text-muted-foreground text-sm">
+      Нет доступных типов встреч
+    </div>
+
+    <div v-else class="grid gap-6 sm:grid-cols-2 max-w-2xl mx-auto">
       <div
-        v-for="et in mockEventTypes"
+        v-for="et in eventTypes"
         :key="et.id"
         class="rounded-xl border bg-card text-card-foreground shadow-sm p-6 flex flex-col hover:shadow-md transition-shadow"
       >

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CalendarGrid from '@/components/CalendarGrid.vue'
-import { mockEventTypes } from '@/mocks/eventTypes'
-import { generateMockSlots } from '@/mocks/slots'
+import { api } from '@/api/client'
+import type { EventType, Slot, Event } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -29,10 +29,33 @@ const eventTypeId = computed(() => route.params.eventTypeId as string)
 
 const selectedType = computed({
   get: () => eventTypeId.value,
-  set: (val: string) => router.push(`/event/${val}`),
+  set: (val: unknown) => {
+    if (typeof val === 'string') router.push(`/event/${val}`)
+  },
 })
 
-const slots = computed(() => generateMockSlots(eventTypeId.value))
+const eventTypes = ref<EventType[]>([])
+const slots = ref<Slot[]>([])
+const events = ref<Event[]>([])
+const loading = ref(true)
+const error = ref('')
+
+onMounted(async () => {
+  try {
+    const [ets, sls, evs] = await Promise.all([
+      api.eventTypes.list(),
+      api.slots.list(),
+      api.events.list(),
+    ])
+    eventTypes.value = ets
+    slots.value = sls
+    events.value = evs
+  } catch {
+    error.value = 'Не удалось загрузить данные'
+  } finally {
+    loading.value = false
+  }
+})
 
 const selectedDay = ref<Date | null>(new Date())
 
@@ -48,6 +71,13 @@ function isoToLocalTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+function combineDateTime(date: Date, time: string): string {
+  const [h, m] = time.split(':').map(Number)
+  const d = new Date(date)
+  d.setHours(h, m, 0, 0)
+  return d.toISOString()
+}
+
 function formatTime(iso: string) {
   const d = new Date(iso)
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -60,6 +90,8 @@ function formatDateLabel(date: Date) {
     weekday: 'short',
   })
 }
+
+const bookedSlotIds = computed(() => new Set(events.value.map((e) => e.slotId)))
 
 const slotsForDay = computed(() => {
   if (!selectedDay.value) return []
@@ -78,9 +110,10 @@ const selectedSlot = computed(() =>
 
 const guestName = ref('')
 const customTime = ref('')
+const submitting = ref(false)
 
 const currentEventType = computed(() =>
-  mockEventTypes.find((t) => t.id === eventTypeId.value) ?? null,
+  eventTypes.value.find((t) => t.id === eventTypeId.value) ?? null,
 )
 
 function addMinutes(time: string, mins: number): string {
@@ -128,18 +161,45 @@ function openBooking(slotId: string) {
   dialogOpen.value = true
 }
 
-function submitBooking() {
-  dialogOpen.value = false
-  window.location.reload()
+async function submitBooking() {
+  if (!selectedSlot.value || !currentEventType.value || !guestName.value) return
+
+  submitting.value = true
+  const startTime = combineDateTime(selectedDay.value!, customTime.value)
+  const endTime = combineDateTime(selectedDay.value!, addMinutes(customTime.value, currentEventType.value.duration))
+
+  try {
+    await api.events.create({
+      slotId: selectedSlot.value.id,
+      guestName: guestName.value,
+      eventTypeId: eventTypeId.value,
+      startTime,
+      endTime,
+      description: '',
+    })
+    dialogOpen.value = false
+    guestName.value = ''
+    const [sls, evs] = await Promise.all([
+      api.slots.list(),
+      api.events.list(),
+    ])
+    slots.value = sls
+    events.value = evs
+  } catch {
+    error.value = 'Ошибка при создании бронирования'
+  } finally {
+    submitting.value = false
+  }
 }
 
 const daySlotsForSelect = computed(() => {
   if (!selectedDay.value) return []
   const day = localDateStr(selectedDay.value)
-  return slots.value.filter((s) => s.startTime.slice(0, 10) === day)
+  return slots.value.filter((s) => s.startTime.slice(0, 10) === day && !bookedSlotIds.value.has(s.id))
 })
 
-function onSlotSelectChange(val: string) {
+function onSlotSelectChange(val: unknown) {
+  if (typeof val !== 'string') return
   selectedSlotId.value = val
   const slot = slots.value.find((s) => s.id === val)
   if (slot) {
@@ -158,16 +218,27 @@ function timeMax() {
 
 <template>
   <div class="py-8 px-4">
+    <!-- Loading state -->
+    <div v-if="loading" class="text-center text-sm text-muted-foreground py-12">
+      Загрузка...
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="text-center text-sm text-destructive py-12">
+      {{ error }}
+    </div>
+
+    <template v-else>
     <!-- Event type selector -->
     <div class="max-w-sm mb-8">
       <Label class="mb-1.5 block">Тип встречи</Label>
-      <Select :model-value="selectedType" @update:model-value="selectedType = $event">
+      <Select :model-value="selectedType" @update:model-value="selectedType = $event as string">
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Выберите тип" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem
-            v-for="et in mockEventTypes"
+            v-for="et in eventTypes"
             :key="et.id"
             :value="et.id"
           >
@@ -199,10 +270,19 @@ function timeMax() {
           v-for="slot in slotsForDay"
           :key="slot.id"
           type="button"
-          class="w-full rounded-lg border bg-card text-card-foreground px-4 py-3 text-left text-sm hover:bg-accent transition-colors cursor-pointer"
+          :disabled="bookedSlotIds.has(slot.id)"
+          :class="[
+            'w-full rounded-lg border bg-card text-card-foreground px-4 py-3 text-left text-sm transition-colors',
+            bookedSlotIds.has(slot.id)
+              ? 'opacity-40 cursor-not-allowed line-through'
+              : 'hover:bg-accent cursor-pointer',
+          ]"
           @click="openBooking(slot.id)"
         >
           {{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}
+          <span v-if="bookedSlotIds.has(slot.id)" class="ml-2 text-xs text-muted-foreground">
+            занято
+          </span>
         </button>
       </div>
     </div>
@@ -211,6 +291,7 @@ function timeMax() {
       Выберите день в календаре
     </div>
   </div>
+  </template>
 
     <!-- Booking dialog -->
     <Dialog v-model:open="dialogOpen">
@@ -218,7 +299,7 @@ function timeMax() {
         <DialogHeader>
           <DialogTitle>
             Бронирование —
-            {{ mockEventTypes.find((t) => t.id === eventTypeId)?.name ?? eventTypeId }},
+            {{ eventTypes.find((t) => t.id === eventTypeId)?.name ?? eventTypeId }},
             {{ selectedDay ? formatDateLabel(selectedDay) : '' }}
           </DialogTitle>
         </DialogHeader>
@@ -265,8 +346,8 @@ function timeMax() {
         </div>
 
         <DialogFooter class="mt-4">
-          <Button @click="submitBooking" :disabled="!timeValidation.valid">
-            Забронировать
+          <Button @click="submitBooking" :disabled="!timeValidation.valid || submitting">
+            {{ submitting ? 'Бронирование...' : 'Забронировать' }}
           </Button>
         </DialogFooter>
       </DialogContent>

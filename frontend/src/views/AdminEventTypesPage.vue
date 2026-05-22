@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { mockEventTypes } from '@/mocks/eventTypes'
+import { ref, onMounted } from 'vue'
+import { api } from '@/api/client'
 import type { EventType } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,9 +13,21 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+const eventTypes = ref<EventType[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    eventTypes.value = await api.eventTypes.list()
+  } finally {
+    loading.value = false
+  }
+})
+
 const dialogOpen = ref(false)
 const editingItem = ref<EventType | null>(null)
 const isCreate = ref(true)
+const submitting = ref(false)
 
 const formId = ref('')
 const formName = ref('')
@@ -42,16 +54,44 @@ function openEdit(item: EventType) {
   dialogOpen.value = true
 }
 
-function handleCreate() {
-  dialogOpen.value = false
+async function handleSubmit() {
+  submitting.value = true
+  try {
+    if (isCreate.value) {
+      await api.eventTypes.create({
+        id: formId.value,
+        name: formName.value,
+        description: formDescription.value,
+        duration: formDuration.value,
+      })
+    } else {
+      await api.eventTypes.update(formId.value, {
+        name: formName.value,
+        description: formDescription.value,
+        duration: formDuration.value,
+      })
+    }
+    dialogOpen.value = false
+    eventTypes.value = await api.eventTypes.list()
+  } catch {
+    // ошибка
+  } finally {
+    submitting.value = false
+  }
 }
 
-function handleDelete() {
-  dialogOpen.value = false
-}
-
-function handleCancel() {
-  dialogOpen.value = false
+async function handleDelete() {
+  if (!editingItem.value) return
+  submitting.value = true
+  try {
+    await api.eventTypes.delete(editingItem.value.id)
+    dialogOpen.value = false
+    eventTypes.value = await api.eventTypes.list()
+  } catch {
+    // ошибка
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -62,9 +102,13 @@ function handleCancel() {
       <Button @click="openCreate">Добавить</Button>
     </div>
 
-    <div class="space-y-3">
+    <div v-if="loading" class="text-sm text-muted-foreground py-8 text-center">
+      Загрузка...
+    </div>
+
+    <div v-else class="space-y-3">
       <div
-        v-for="et in mockEventTypes"
+        v-for="et in eventTypes"
         :key="et.id"
         class="rounded-lg border bg-card text-card-foreground px-4 py-3 flex items-center justify-between"
       >
@@ -107,12 +151,18 @@ function handleCancel() {
         </div>
 
         <DialogFooter class="mt-4 gap-2">
-          <Button v-if="isCreate" variant="default" @click="handleCreate">Создать</Button>
+          <Button v-if="isCreate" variant="default" :disabled="submitting" @click="handleSubmit">
+            {{ submitting ? 'Создание...' : 'Создать' }}
+          </Button>
           <template v-else>
-            <Button variant="default" @click="handleCreate">Обновить</Button>
-            <Button variant="destructive" @click="handleDelete">Удалить</Button>
+            <Button variant="default" :disabled="submitting" @click="handleSubmit">
+              {{ submitting ? 'Обновление...' : 'Обновить' }}
+            </Button>
+            <Button variant="destructive" :disabled="submitting" @click="handleDelete">
+              {{ submitting ? 'Удаление...' : 'Удалить' }}
+            </Button>
           </template>
-          <Button variant="outline" @click="handleCancel">Отмена</Button>
+          <Button variant="outline" @click="dialogOpen = false">Отмена</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

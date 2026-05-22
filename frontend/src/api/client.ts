@@ -3,6 +3,8 @@ import type {
   Slot,
   Event,
   CreateEventRequest,
+  CreateSlotRequest,
+  UpdateSlotRequest,
   CreateEventTypeRequest,
   UpdateEventTypeRequest,
   GenerateSlotsRequest,
@@ -33,6 +35,12 @@ export const api = {
   },
   slots: {
     list: () => request<Slot[]>('/slots'),
+    create: (body: CreateSlotRequest) =>
+      request<Slot>('/slots', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id: string, body: UpdateSlotRequest) =>
+      request<Slot>(`/slots/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    delete: (id: string) =>
+      request<void>(`/slots/${id}`, { method: 'DELETE' }),
     generate: (body: GenerateSlotsRequest) =>
       request<Slot[]>('/slots/generate', { method: 'POST', body: JSON.stringify(body) }),
   },

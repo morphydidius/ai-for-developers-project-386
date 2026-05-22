@@ -53,6 +53,16 @@ export interface UpdateEventTypeRequest {
   duration: number
 }
 
+export interface CreateSlotRequest {
+  startTime: string
+  endTime: string
+}
+
+export interface UpdateSlotRequest {
+  startTime: string
+  endTime: string
+}
+
 export interface GenerateSlotsRequest {
   startDate: string
   endDate: string

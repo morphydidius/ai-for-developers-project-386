@@ -74,6 +74,42 @@ app.get('/api/slots', (_req, res) => {
   res.json(db.data.slots)
 })
 
+app.post('/api/slots', (req, res) => {
+  const body = req.body
+  if (!body.startTime || !body.endTime) {
+    return res.status(400).json({ code: 400, message: 'startTime and endTime required' })
+  }
+  const slot = {
+    id: `slot-${Date.now()}`,
+    startTime: body.startTime,
+    endTime: body.endTime,
+  }
+  db.data.slots.push(slot)
+  db.write()
+  res.status(201).json(slot)
+})
+
+app.put('/api/slots/:id', (req, res) => {
+  const idx = db.data.slots.findIndex((s) => s.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ code: 404, message: 'Not found' })
+  const body = req.body
+  db.data.slots[idx] = {
+    id: req.params.id,
+    startTime: body.startTime,
+    endTime: body.endTime,
+  }
+  db.write()
+  res.json(db.data.slots[idx])
+})
+
+app.delete('/api/slots/:id', (req, res) => {
+  const idx = db.data.slots.findIndex((s) => s.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ code: 404, message: 'Not found' })
+  db.data.slots.splice(idx, 1)
+  db.write()
+  res.status(204).end()
+})
+
 app.post('/api/slots/generate', (req, res) => {
   const { startDate, endDate } = req.body
   if (!startDate || !endDate) {

@@ -1,19 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { generateMockSlots } from '@/mocks/slots'
-import { generateMockEvents } from '@/mocks/events'
+import { ref, computed, onMounted } from 'vue'
+import { api } from '@/api/client'
 import type { Slot, Event } from '@/types/api'
 
 function isoToLocalTime(iso: string): string {
   const d = new Date(iso)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function localDateStr(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function formatDateLabel(date: Date): string {
@@ -24,8 +16,24 @@ function formatDateLabel(date: Date): string {
   })
 }
 
-const slots = computed(() => generateMockSlots('admin'))
-const events = computed(() => generateMockEvents())
+const slots = ref<Slot[]>([])
+const events = ref<Event[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const [sls, evs] = await Promise.all([
+      api.slots.list(),
+      api.events.list(),
+    ])
+    slots.value = sls
+    events.value = evs
+  } catch {
+    // данные остаются пустыми
+  } finally {
+    loading.value = false
+  }
+})
 
 const bookedSlotIds = computed(() => new Set(events.value.map((e) => e.slotId)))
 
@@ -65,7 +73,11 @@ const dayGroups = computed(() => {
   <div>
     <h1 class="text-2xl font-bold mb-6">Бронирования</h1>
 
-    <div v-if="dayGroups.length === 0" class="text-muted-foreground text-sm">
+    <div v-if="loading" class="text-muted-foreground text-sm py-8 text-center">
+      Загрузка...
+    </div>
+
+    <div v-else-if="dayGroups.length === 0" class="text-muted-foreground text-sm">
       Нет доступных слотов
     </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { generateMockSlots } from '@/mocks/slots'
+import { ref, computed, onMounted } from 'vue'
+import { api } from '@/api/client'
+import type { Slot } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -22,11 +23,29 @@ const maxDateStr = (() => {
 
 const selectedDate = ref(todayStr)
 
-const allSlots = computed(() => generateMockSlots('admin'))
+const allSlots = ref<Slot[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    allSlots.value = await api.slots.list()
+  } catch {
+    // слоты остаются пустыми
+  } finally {
+    loading.value = false
+  }
+})
 
 const slotsForDate = computed(() =>
   allSlots.value.filter((s) => s.startTime.slice(0, 10) === selectedDate.value),
 )
+
+function combineDateTime(dateStr: string, timeStr: string): string {
+  const [h, m] = timeStr.split(':').map(Number)
+  const d = new Date(`${dateStr}T00:00:00`)
+  d.setHours(h, m, 0, 0)
+  return d.toISOString()
+}
 
 function isoToLocalTime(iso: string): string {
   const d = new Date(iso)
@@ -39,6 +58,7 @@ const slotDialogOpen = ref(false)
 const editingSlotId = ref<string | null>(null)
 const formStartTime = ref('09:00')
 const formEndTime = ref('10:00')
+const submitting = ref(false)
 
 const isEditMode = computed(() => editingSlotId.value !== null)
 
@@ -71,22 +91,51 @@ function openEdit(slotId: string) {
   slotDialogOpen.value = true
 }
 
-function handleSubmit() {
-  slotDialogOpen.value = false
+async function handleSubmit() {
+  if (!formStartTime.value || !formEndTime.value) return
+  submitting.value = true
+  try {
+    const startTime = combineDateTime(selectedDate.value, formStartTime.value)
+    const endTime = combineDateTime(selectedDate.value, formEndTime.value)
+    if (isEditMode.value && editingSlotId.value) {
+      await api.slots.update(editingSlotId.value, { startTime, endTime })
+    } else {
+      await api.slots.create({ startTime, endTime })
+    }
+    slotDialogOpen.value = false
+    allSlots.value = await api.slots.list()
+  } catch {
+    // ошибка
+  } finally {
+    submitting.value = false
+  }
 }
 
 // ── Delete dialog ──
 
 const deleteDialogOpen = ref(false)
+const deletingSlotId = ref<string | null>(null)
 const deletingSlotLabel = ref('')
+const deleting = ref(false)
 
-function openDelete(iso: string) {
+function openDelete(slotId: string, iso: string) {
+  deletingSlotId.value = slotId
   deletingSlotLabel.value = `${isoToLocalTime(iso)}`
   deleteDialogOpen.value = true
 }
 
-function handleDelete() {
-  deleteDialogOpen.value = false
+async function handleDelete() {
+  if (!deletingSlotId.value) return
+  deleting.value = true
+  try {
+    await api.slots.delete(deletingSlotId.value)
+    deleteDialogOpen.value = false
+    allSlots.value = await api.slots.list()
+  } catch {
+    // ошибка
+  } finally {
+    deleting.value = false
+  }
 }
 </script>
 
@@ -94,6 +143,11 @@ function handleDelete() {
   <div class="max-w-[1000px]">
     <h1 class="text-2xl font-bold mb-6">Слоты</h1>
 
+    <div v-if="loading" class="text-sm text-muted-foreground py-8 text-center">
+      Загрузка...
+    </div>
+
+    <template v-else>
     <div class="flex items-end gap-4 mb-6">
       <div class="space-y-1.5">
         <Label>Дата</Label>
@@ -127,13 +181,14 @@ function handleDelete() {
           </span>
           <div class="flex gap-2">
             <Button variant="outline" size="sm" @click="openEdit(slot.id)">Редактировать</Button>
-            <Button variant="destructive" size="sm" @click="openDelete(slot.startTime)">
+            <Button variant="destructive" size="sm" @click="openDelete(slot.id, slot.startTime)">
               Удалить
             </Button>
           </div>
         </div>
       </div>
     </div>
+    </template>
 
     <!-- Slot dialog (create / edit) -->
     <Dialog v-model:open="slotDialogOpen">
@@ -180,10 +235,10 @@ function handleDelete() {
         <DialogFooter class="mt-4 gap-2">
           <Button
             variant="default"
-            :disabled="!formStartTime || !formEndTime || formStartTime >= formEndTime || checkOverlap(formStartTime, formEndTime).length > 0"
+            :disabled="!formStartTime || !formEndTime || formStartTime >= formEndTime || checkOverlap(formStartTime, formEndTime).length > 0 || submitting"
             @click="handleSubmit"
           >
-            {{ isEditMode ? 'Обновить' : 'Создать' }}
+            {{ submitting ? (isEditMode ? 'Обновление...' : 'Создание...') : (isEditMode ? 'Обновить' : 'Создать') }}
           </Button>
           <Button variant="outline" @click="slotDialogOpen = false">Отмена</Button>
         </DialogFooter>
@@ -198,7 +253,9 @@ function handleDelete() {
         </DialogHeader>
         <p class="text-sm text-muted-foreground">Удалить слот {{ deletingSlotLabel }}?</p>
         <DialogFooter class="mt-4 gap-2">
-          <Button variant="destructive" @click="handleDelete">Удалить</Button>
+          <Button variant="destructive" :disabled="deleting" @click="handleDelete">
+            {{ deleting ? 'Удаление...' : 'Удалить' }}
+          </Button>
           <Button variant="outline" @click="deleteDialogOpen = false">Отмена</Button>
         </DialogFooter>
       </DialogContent>

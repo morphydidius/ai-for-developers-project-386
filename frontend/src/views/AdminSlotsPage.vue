@@ -91,7 +91,7 @@ function handleDelete() {
 </script>
 
 <template>
-  <div>
+  <div class="max-w-[1000px]">
     <h1 class="text-2xl font-bold mb-6">Слоты</h1>
 
     <div class="flex items-end gap-4 mb-6">

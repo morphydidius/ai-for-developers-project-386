@@ -177,19 +177,20 @@ function timeMax() {
       </Select>
     </div>
 
-    <!-- Calendar -->
-    <div class="max-w-md mb-8">
-      <CalendarGrid
-        :slots="slots"
-        v-model="selectedDay"
-      />
-    </div>
+    <div class="grid md:grid-cols-2 gap-8 items-start">
+      <!-- Calendar -->
+      <div>
+        <CalendarGrid
+          :slots="slots"
+          v-model="selectedDay"
+        />
+      </div>
 
-    <!-- Slot list -->
-    <div v-if="selectedDay" class="max-w-md">
-      <p class="text-sm text-muted-foreground mb-3">
-        Слоты на {{ formatDateLabel(selectedDay) }}
-      </p>
+      <!-- Slot list -->
+      <div v-if="selectedDay">
+        <p class="text-sm text-muted-foreground mb-3">
+          Слоты на {{ formatDateLabel(selectedDay) }}
+        </p>
       <div v-if="slotsForDay.length === 0" class="text-sm text-muted-foreground">
         Нет доступных слотов
       </div>
@@ -209,6 +210,7 @@ function timeMax() {
     <div v-else class="text-sm text-muted-foreground">
       Выберите день в календаре
     </div>
+  </div>
 
     <!-- Booking dialog -->
     <Dialog v-model:open="dialogOpen">

@@ -95,6 +95,7 @@ function select(date: Date) {
       <button
         v-for="day in days"
         :key="day.iso"
+        :data-testid="`day-${day.iso}`"
         type="button"
         :disabled="isBlocked(day.iso) || !hasSlots(day.iso)"
         :class="cn(

@@ -270,6 +270,7 @@ function timeMax() {
           v-for="slot in slotsForDay"
           :key="slot.id"
           type="button"
+          :data-testid="`slot-${slot.id}`"
           :disabled="bookedSlotIds.has(slot.id)"
           :class="[
             'w-full rounded-lg border bg-card text-card-foreground px-4 py-3 text-left text-sm transition-colors',
@@ -280,7 +281,7 @@ function timeMax() {
           @click="openBooking(slot.id)"
         >
           {{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}
-          <span v-if="bookedSlotIds.has(slot.id)" class="ml-2 text-xs text-muted-foreground">
+          <span v-if="bookedSlotIds.has(slot.id)" :data-testid="`booked-${slot.id}`" class="ml-2 text-xs text-muted-foreground">
             занято
           </span>
         </button>
@@ -341,12 +342,12 @@ function timeMax() {
 
           <div class="space-y-1.5">
             <Label>Имя гостя</Label>
-            <Input v-model="guestName" placeholder="Введите имя" />
+            <Input v-model="guestName" placeholder="Введите имя" data-testid="guest-name" />
           </div>
         </div>
 
         <DialogFooter class="mt-4">
-          <Button @click="submitBooking" :disabled="!timeValidation.valid || submitting">
+          <Button data-testid="submit-booking" @click="submitBooking" :disabled="!timeValidation.valid || submitting">
             {{ submitting ? 'Бронирование...' : 'Забронировать' }}
           </Button>
         </DialogFooter>

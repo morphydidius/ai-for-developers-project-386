@@ -46,7 +46,7 @@ function goToBooking(eventTypeId: string) {
         <p class="text-muted-foreground text-sm mb-6 flex-1">
           {{ et.description }}
         </p>
-        <Button class="w-full" @click="goToBooking(et.id)">
+        <Button class="w-full" :data-testid="`book-${et.id}`" @click="goToBooking(et.id)">
           Забронировать
         </Button>
       </div>

@@ -1,9 +1,14 @@
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { JSONPreset } from 'lowdb/node'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const app = express()
-app.use(cors({ origin: 'http://localhost:5173' }))
+app.use(cors({ origin: '*' }))
 app.use(express.json())
 
 const defaultData = {
@@ -166,6 +171,17 @@ app.delete('/api/events/:id', (req, res) => {
   res.status(204).end()
 })
 
-app.listen(3001, () => {
-  console.log('Booking API running on http://localhost:3001')
+// ── Static files (frontend SPA) ──
+
+const distPath = path.join(__dirname, '../frontend/dist')
+app.use(express.static(distPath))
+app.get('/{*path}', (_req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'))
+})
+
+// ── Start ──
+
+const PORT = process.env.PORT || 3001
+app.listen(PORT, () => {
+  console.log(`Booking API running on port ${PORT}`)
 })
